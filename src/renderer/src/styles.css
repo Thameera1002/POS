@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-ink-900 text-slate-100 font-sans antialiased;
+    /* A POS is touched, not read. Text selection just gets in the way. */
+    user-select: none;
+    overflow: hidden;
+  }
+
+  input,
+  textarea {
+    user-select: text;
+  }
+
+  /* Slim scrollbars: the long menu and order panels scroll constantly. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-ink-500 rounded-full border-2 border-transparent bg-clip-content;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-ink-400;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer components {
+  /* Every tap target is at least 44px tall — thumbs, not mice. */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 min-h-[44px]
+           text-sm font-semibold transition-colors select-none
+           disabled:opacity-40 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply btn bg-brand-500 text-white hover:bg-brand-400 active:bg-brand-600;
+  }
+  .btn-ghost {
+    @apply btn bg-ink-600 text-slate-200 hover:bg-ink-500 active:bg-ink-700;
+  }
+  .btn-danger {
+    @apply btn bg-rose-600/90 text-white hover:bg-rose-500;
+  }
+  .btn-success {
+    @apply btn bg-emerald-600 text-white hover:bg-emerald-500;
+  }
+
+  .panel {
+    @apply bg-ink-800 border border-ink-600 rounded-2xl shadow-panel;
+  }
+
+  .field {
+    @apply w-full rounded-xl bg-ink-700 border border-ink-500 px-3 py-2.5 text-sm
+           text-slate-100 placeholder:text-slate-500
+           focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25;
+  }
+
+  .label {
+    @apply block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold;
+  }
+
+  /* Paper. Monospace at printer column width so the preview matches the ticket. */
+  .receipt-paper {
+    @apply font-mono text-[12px] leading-[1.45] whitespace-pre text-slate-900 bg-[#fdfdf8]
+           rounded-md px-4 py-5 overflow-x-auto;
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-slide-up {
+  animation: slide-up 0.16s ease-out;
+}

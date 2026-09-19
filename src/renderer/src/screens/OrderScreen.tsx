@@ -3,8 +3,9 @@ import { usePos } from '../store'
 import { ModifierModal } from '../components/ModifierModal'
 import { PaymentModal } from '../components/PaymentModal'
 import { Modal } from '../components/Modal'
+import { CustomerModal } from '../components/CustomerModal'
 import { cn, money, orderNo } from '../lib/format'
-import type { MenuItemWithModifiers, OrderItem, Station } from '../../../shared/types'
+import type { MenuItemWithModifiers, Order, OrderItem, Station } from '../../../shared/types'
 
 const STATION_DOT: Record<Station, string> = {
   kitchen: 'bg-orange-400',
@@ -47,7 +48,12 @@ export function OrderScreen() {
       <section className="flex flex-col min-w-0 border-r border-ink-600">
         <div className="flex items-center gap-3 px-6 py-4 border-b border-ink-600">
           <button className="btn-ghost" onClick={closeOrder}>
-            ← Floor
+            ←{' '}
+            {activeOrder.order_type === 'dine_in'
+              ? 'Floor'
+              : activeOrder.order_type === 'delivery'
+                ? 'Delivery'
+                : 'Takeaway'}
           </button>
           <input
             className="field flex-1"
@@ -135,12 +141,14 @@ function CheckPanel({ onPay }: { onPay: () => void }) {
     reprintRound,
     printBill,
     patchOrder,
+    updateCustomer,
     voidOrder,
     busy
   } = usePos()
   const [voiding, setVoiding] = useState(false)
   const [reason, setReason] = useState('')
   const [discountOpen, setDiscountOpen] = useState(false)
+  const [customerOpen, setCustomerOpen] = useState(false)
 
   if (!order) return null
   const sym = settings?.currency_symbol ?? ''
@@ -177,6 +185,10 @@ function CheckPanel({ onPay }: { onPay: () => void }) {
             )}
           </div>
         </div>
+
+        {order.order_type !== 'dine_in' && (
+          <CustomerStrip order={order} onEdit={() => setCustomerOpen(true)} />
+        )}
       </header>
 
       <div className="flex-1 overflow-y-auto px-3 py-3 min-h-0">
@@ -342,7 +354,58 @@ function CheckPanel({ onPay }: { onPay: () => void }) {
         onClose={() => setDiscountOpen(false)}
         onApply={(pct) => patchOrder({ discount_pct: pct })}
       />
+
+      {customerOpen && (
+        <CustomerModal
+          open
+          mode={order.order_type === 'delivery' ? 'delivery' : 'takeaway'}
+          title={order.order_type === 'delivery' ? 'Delivery details' : 'Customer details'}
+          initial={order}
+          onClose={() => setCustomerOpen(false)}
+          onSubmit={updateCustomer}
+        />
+      )}
     </aside>
+  )
+}
+
+/**
+ * Who the order is for, under the check header. Takeaway shows a quiet
+ * "add details" affordance for when a customer asks; delivery always shows the
+ * address, because the driver reads it from here if the ticket is lost.
+ */
+function CustomerStrip({ order, onEdit }: { order: Order; onEdit: () => void }) {
+  const has = order.customer_name || order.customer_phone || order.delivery_address
+
+  if (!has) {
+    return (
+      <button
+        onClick={onEdit}
+        className="mt-3 text-xs text-slate-400 hover:text-brand-400 transition-colors"
+      >
+        + Add customer details
+      </button>
+    )
+  }
+
+  return (
+    <button
+      onClick={onEdit}
+      className="mt-3 w-full text-left rounded-xl bg-ink-700/60 hover:bg-ink-700 px-3 py-2 transition-colors"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 text-xs">
+          {order.customer_name && <p className="font-semibold truncate">{order.customer_name}</p>}
+          {order.customer_phone && (
+            <p className="text-slate-400 font-mono">{order.customer_phone}</p>
+          )}
+          {order.delivery_address && (
+            <p className="text-slate-300 mt-1 leading-snug">{order.delivery_address}</p>
+          )}
+        </div>
+        <span className="text-[11px] text-slate-500 shrink-0">edit</span>
+      </div>
+    </button>
   )
 }
 

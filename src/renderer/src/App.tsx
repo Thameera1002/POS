@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { usePos, type Screen } from './store'
 import { FloorScreen } from './screens/FloorScreen'
-import { CounterScreen } from './screens/CounterScreen'
+import { TakeawayScreen } from './screens/TakeawayScreen'
+import { DeliveryScreen } from './screens/DeliveryScreen'
 import { OrderScreen } from './screens/OrderScreen'
 import { OrdersScreen } from './screens/OrdersScreen'
 import { MenuScreen } from './screens/MenuScreen'
@@ -13,7 +14,8 @@ import { cn } from './lib/format'
 
 const NAV: { key: Screen; label: string; icon: string }[] = [
   { key: 'floor', label: 'Floor', icon: '▦' },
-  { key: 'counter', label: 'Counter', icon: '▧' },
+  { key: 'takeaway', label: 'Takeaway', icon: '▧' },
+  { key: 'delivery', label: 'Delivery', icon: '➤' },
   { key: 'orders', label: 'Orders', icon: '☰' },
   { key: 'menu', label: 'Menu', icon: '✎' },
   { key: 'reports', label: 'Reports', icon: '▤' },
@@ -40,30 +42,39 @@ export default function App() {
   const mode = settings?.service_mode ?? 'both'
 
   // A takeaway-only venue has no tables, so the floor plan is dead weight; a
-  // dine-in-only one never needs the counter queue. Hiding the irrelevant screen
-  // beats showing an empty one.
+  // dine-in-only one never needs the takeaway or delivery queues. Hiding the
+  // irrelevant screen beats showing an empty one.
   const nav = NAV.filter((n) => {
     if (n.key === 'floor') return mode !== 'takeaway'
-    if (n.key === 'counter') return mode !== 'dine_in'
+    if (n.key === 'takeaway' || n.key === 'delivery') return mode !== 'dine_in'
     return true
   })
 
-  const dineInCount = openOrders.filter((o) => o.order_type === 'dine_in').length
-  const counterCount = openOrders.length - dineInCount
+  const count = (type: string): number => openOrders.filter((o) => o.order_type === type).length
+  const badges: Partial<Record<Screen, number>> = {
+    floor: count('dine_in'),
+    takeaway: count('takeaway'),
+    delivery: count('delivery')
+  }
   // Keep the tab the open order belongs to lit while editing it.
-  const activeOrderHome: Screen = activeOrder?.order_type === 'dine_in' ? 'floor' : 'counter'
+  const activeOrderHome: Screen =
+    activeOrder?.order_type === 'dine_in'
+      ? 'floor'
+      : activeOrder?.order_type === 'delivery'
+        ? 'delivery'
+        : 'takeaway'
 
   // Land on whichever home this venue uses once settings have loaded.
   useEffect(() => {
     if (!ready) return
-    if (mode === 'takeaway' && screen === 'floor') go('counter')
-    if (mode === 'dine_in' && screen === 'counter') go('floor')
+    if (mode === 'takeaway' && screen === 'floor') go('takeaway')
+    if (mode === 'dine_in' && (screen === 'takeaway' || screen === 'delivery')) go('floor')
   }, [ready, mode, screen, go])
 
-  // Keep the floor view honest while it is on screen: another terminal or a
+  // Keep the queue views honest while on screen: another terminal or a
   // long-running check should not leave stale totals sitting in front of staff.
   useEffect(() => {
-    if (screen !== 'floor') return
+    if (screen !== 'floor' && screen !== 'takeaway' && screen !== 'delivery') return
     const id = setInterval(() => void refreshOpenOrders(), 20000)
     return () => clearInterval(id)
   }, [screen, refreshOpenOrders])
@@ -106,14 +117,9 @@ export default function App() {
             <span className="text-lg leading-none">{n.icon}</span>
             <span className="text-[10px] font-semibold">{n.label}</span>
 
-            {n.key === 'floor' && dineInCount > 0 && (
+            {(badges[n.key] ?? 0) > 0 && (
               <span className="absolute top-1.5 right-2 chip bg-brand-500 text-white px-1.5">
-                {dineInCount}
-              </span>
-            )}
-            {n.key === 'counter' && counterCount > 0 && (
-              <span className="absolute top-1.5 right-2 chip bg-brand-500 text-white px-1.5">
-                {counterCount}
+                {badges[n.key]}
               </span>
             )}
             {/* An unnoticed failed kitchen ticket is a lost order, so the badge
@@ -130,8 +136,10 @@ export default function App() {
       <main className="flex-1 min-w-0">
         {screen === 'order' && activeOrder ? (
           <OrderScreen />
-        ) : screen === 'counter' ? (
-          <CounterScreen />
+        ) : screen === 'takeaway' ? (
+          <TakeawayScreen />
+        ) : screen === 'delivery' ? (
+          <DeliveryScreen />
         ) : screen === 'orders' ? (
           <OrdersScreen />
         ) : screen === 'menu' ? (

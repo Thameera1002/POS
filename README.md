@@ -6,7 +6,7 @@ ticket printing over ESC/POS.
 ```bash
 npm install
 npm run dev          # development, with hot reload
-npm run test:smoke   # 101-assertion end-to-end check of orders, menu + printing
+npm run test:smoke   # 114-assertion end-to-end check of orders, menu + printing
 npm run build        # production bundle
 npm run dist:mac     # packaged .dmg  (dist:win for Windows)
 ```
@@ -17,25 +17,42 @@ Set under **Settings → Restaurant**:
 
 | Mode | Screens shown | Home |
 |---|---|---|
-| `both` (default) | Floor + Counter | Floor |
+| `both` (default) | Floor + Takeaway + Delivery | Floor |
 | `dine_in` | Floor only | Floor |
-| `takeaway` | Counter only — the floor plan disappears | Counter |
+| `takeaway` | Takeaway + Delivery — the floor plan disappears | Takeaway |
 
 **Takeaway and delivery never appear on the floor plan.** A bag on the pass has
 nothing to do with seating, and mixing the two ruined the one question the floor
-exists to answer: *which tables need me?* Counter trade lives on its own screen,
-with takeaway and delivery queued separately.
+exists to answer: *which tables need me?* Each has its own screen and queue.
+
+### What each service type asks about the customer
+
+| | Name | Phone | Address |
+|---|---|---|---|
+| Dine in | — | — | — |
+| **Takeaway** | optional | optional | — |
+| **Delivery** | **required** | **required** | **required** |
+
+Takeaway's fast path asks for nothing: one tap and you are on the menu. A name or
+number is captured only when the customer asks — via *With customer details* on the
+Takeaway screen, or *+ Add customer details* on an open check.
+
+Delivery will not start without all three. The form refuses to enable its button,
+and the main process rejects the order independently (`assertCustomerDetails` in
+`orders.ts`), so no code path can create an undeliverable order. The rule is
+re-checked on every edit: an address cannot be blanked after creation, and switching
+a takeaway to delivery demands the details. The address prints as its own
+`DELIVER TO:` block on the kitchen ticket and is searchable in **Orders**.
 
 They stay traceable through **Orders**, which searches every transaction by order
-number, customer name or phone, filtered by status, service type and date range —
-plus receipt reprint. That is how a takeaway order is found when the customer rings
-back, without it ever having occupied a table.
+number, customer name, phone or address, filtered by status, service type and date
+range — plus receipt reprint.
 
-When **"takeaway is paid when the order is sent"** is on (default), the counter's
-main button becomes *Send & take payment*: it fires the kitchen tickets and opens
-the tender sheet in one pass. The payment sheet only opens **if every kitchen ticket
-actually printed** — taking money for food the kitchen never heard about is the
-worst outcome available here.
+When **"takeaway is paid when the order is sent"** is on (default), the main button
+on takeaway and delivery orders becomes *Send & take payment*: it fires the kitchen
+tickets and opens the tender sheet in one pass. The payment sheet only opens **if
+every kitchen ticket actually printed** — taking money for food the kitchen never
+heard about is the worst outcome available here.
 
 ## Managing the menu
 
@@ -140,7 +157,8 @@ src/
     ipc.ts            the renderer's entire surface area
   renderer/src/screens/
     FloorScreen       tables (dine-in only)
-    CounterScreen     takeaway + delivery queues
+    TakeawayScreen    takeaway queue; no customer details required
+    DeliveryScreen    delivery queue; name, phone + address required
     OrderScreen       menu + check + fire/pay
     OrdersScreen      searchable transaction history
     MenuScreen        item + category management

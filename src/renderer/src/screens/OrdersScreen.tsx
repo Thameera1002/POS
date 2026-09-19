@@ -76,7 +76,7 @@ export function OrdersScreen() {
               className="field"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Order number, customer name or phone"
+              placeholder="Order number, customer name, phone or address"
             />
           </div>
           <div>
@@ -296,11 +296,14 @@ function OrderDetail({
       }
     >
       <div className="space-y-5">
-        {(order.customer_name || order.customer_phone || order.note) && (
+        {(order.customer_name || order.customer_phone || order.delivery_address || order.note) && (
           <div className="panel bg-ink-700/50 px-4 py-3 text-sm space-y-1">
             {order.customer_name && <p>{order.customer_name}</p>}
             {order.customer_phone && (
               <p className="font-mono text-slate-400">{order.customer_phone}</p>
+            )}
+            {order.delivery_address && (
+              <p className="text-slate-300">Deliver to: {order.delivery_address}</p>
             )}
             {order.note && <p className="text-slate-400">{order.note}</p>}
           </div>

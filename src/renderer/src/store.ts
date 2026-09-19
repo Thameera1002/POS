@@ -4,6 +4,7 @@ import type {
   AddPaymentInput,
   Category,
   CreateOrderInput,
+  CustomerDetailsInput,
   DiningTable,
   MenuItemWithModifiers,
   Order,
@@ -13,7 +14,15 @@ import type {
   Settings
 } from '../../shared/types'
 
-export type Screen = 'floor' | 'counter' | 'order' | 'orders' | 'menu' | 'reports' | 'settings'
+export type Screen =
+  | 'floor'
+  | 'takeaway'
+  | 'delivery'
+  | 'order'
+  | 'orders'
+  | 'menu'
+  | 'reports'
+  | 'settings'
 
 export interface Toast {
   id: number
@@ -50,7 +59,8 @@ interface PosState {
   /** Where "home" is, given how this venue trades. */
   homeScreen: () => Screen
 
-  openTable: (input: CreateOrderInput) => Promise<void>
+  /** @returns whether the order was created; a form can stay open on failure. */
+  openTable: (input: CreateOrderInput) => Promise<boolean>
   loadOrder: (id: number) => Promise<void>
   closeOrder: () => void
 
@@ -58,6 +68,8 @@ interface PosState {
   setQty: (orderItemId: number, qty: number) => Promise<void>
   removeItem: (orderItemId: number, reason?: string) => Promise<void>
   patchOrder: (patch: Record<string, unknown>) => Promise<void>
+  /** Adds or corrects who the order is for. Validation lives in the main process. */
+  updateCustomer: (details: CustomerDetailsInput) => Promise<boolean>
 
   fire: () => Promise<boolean>
   reprintRound: (round: number) => Promise<void>
@@ -114,10 +126,10 @@ export const usePos = create<PosState>((set, get) => ({
 
   /**
    * A takeaway-only venue has no tables, so the floor plan is meaningless there
-   * and the counter is home instead.
+   * and the takeaway queue is home instead.
    */
   homeScreen() {
-    return get().settings?.service_mode === 'takeaway' ? 'counter' : 'floor'
+    return get().settings?.service_mode === 'takeaway' ? 'takeaway' : 'floor'
   },
 
   async refreshOpenOrders() {
@@ -137,11 +149,14 @@ export const usePos = create<PosState>((set, get) => ({
   },
 
   async openTable(input) {
+    let ok = false
     await guard(set, get, async () => {
       const order = await window.pos.orders.create(input)
       set({ activeOrder: order, screen: 'order' })
       await get().refreshOpenOrders()
+      ok = true
     })
+    return ok
   },
 
   async loadOrder(id) {
@@ -151,9 +166,10 @@ export const usePos = create<PosState>((set, get) => ({
   },
 
   closeOrder() {
-    // Return to wherever the order came from: a table goes back to the floor,
-    // a takeaway back to the counter queue.
-    const from: Screen = get().activeOrder?.order_type === 'dine_in' ? 'floor' : 'counter'
+    // Return to wherever the order came from: a table to the floor, a bag to
+    // the takeaway queue, a driver run to the delivery queue.
+    const type = get().activeOrder?.order_type
+    const from: Screen = type === 'dine_in' ? 'floor' : type === 'delivery' ? 'delivery' : 'takeaway'
     set({ activeOrder: null, screen: from })
     void get().refreshOpenOrders()
   },
@@ -193,8 +209,20 @@ export const usePos = create<PosState>((set, get) => ({
     })
   },
 
+  async updateCustomer(details) {
+    const order = get().activeOrder
+    if (!order) return false
+    let ok = false
+    await guard(set, get, async () => {
+      set({ activeOrder: await window.pos.orders.update(order.id, { ...details }) })
+      await get().refreshOpenOrders()
+      ok = true
+    })
+    return ok
+  },
+
   /**
-   * @returns whether every ticket reached a printer. The counter's
+   * @returns whether every ticket reached a printer. The takeaway
    * send-and-settle flow uses this to refuse to open the payment sheet when the
    * kitchen never got the order.
    */

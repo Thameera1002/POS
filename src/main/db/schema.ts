@@ -161,5 +161,14 @@ CREATE TABLE order_counters (
   last INTEGER NOT NULL DEFAULT 0
 );
 `
+  },
+  {
+    version: 2,
+    // Delivery address gets its own column. It was riding on `note`, which is
+    // fine for "ring the bell twice" but not for a field the app now requires
+    // and needs to validate, search and print in a fixed position.
+    sql: `
+ALTER TABLE orders ADD COLUMN delivery_address TEXT;
+`
   }
 ]

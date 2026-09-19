@@ -13,6 +13,7 @@ import type {
   OrderItemModifier,
   OrderSummary,
   OrderTotals,
+  OrderType,
   Payment,
   PrintResult,
   UpdateItemInput
@@ -93,15 +94,17 @@ export function searchOrders(filter: OrderFilter = {}): OrderSummary[] {
   if (filter.query?.trim()) {
     const q = filter.query.trim()
     where.push(
-      '(CAST(o.order_number AS TEXT) LIKE ? OR o.customer_name LIKE ? OR o.customer_phone LIKE ?)'
+      `(CAST(o.order_number AS TEXT) LIKE ? OR o.customer_name LIKE ?
+        OR o.customer_phone LIKE ? OR o.delivery_address LIKE ?)`
     )
-    args.push(`%${q}%`, `%${q}%`, `%${q}%`)
+    args.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`)
   }
 
   const rows = getDb()
     .prepare(
       `SELECT o.id, o.order_number, o.order_type, t.name AS table_name, o.guest_count,
               o.status, o.opened_at, o.closed_at, o.customer_name, o.customer_phone,
+              o.delivery_address,
               COALESCE(SUM(CASE WHEN i.status != 'voided' THEN i.qty ELSE 0 END), 0) AS item_count,
               MAX(CASE WHEN i.status = 'pending' THEN 1 ELSE 0 END) AS has_unsent
        FROM orders o
@@ -128,7 +131,8 @@ export function listOrders(status?: 'open' | 'paid' | 'void'): OrderSummary[] {
   const rows = getDb()
     .prepare(
       `SELECT o.id, o.order_number, o.order_type, t.name AS table_name, o.guest_count,
-              o.status, o.opened_at, o.closed_at,
+              o.status, o.opened_at, o.closed_at, o.customer_name, o.customer_phone,
+              o.delivery_address,
               COALESCE(SUM(CASE WHEN i.status != 'voided' THEN i.qty ELSE 0 END), 0) AS item_count,
               MAX(CASE WHEN i.status = 'pending' THEN 1 ELSE 0 END) AS has_unsent
        FROM orders o
@@ -198,9 +202,39 @@ export function computeTotals(order: Pick<Order, 'items' | 'payments' | 'discoun
 
 /* ---------- order lifecycle ---------- */
 
+/**
+ * Enforces what each service type must know about its customer.
+ *
+ * Takeaway needs nothing — the customer is standing at the counter, and
+ * making staff type a name for every bag of fries is friction that slows the
+ * queue. Details can still be added when a customer asks.
+ *
+ * Delivery must have all three: with no name the driver cannot ask for anyone,
+ * with no phone nobody can be reached when the gate is locked, and with no
+ * address the food goes nowhere. Enforced here rather than only in the form,
+ * so no code path can create an undeliverable order.
+ */
+function assertCustomerDetails(
+  orderType: OrderType,
+  details: { customer_name?: string | null; customer_phone?: string | null; delivery_address?: string | null }
+): void {
+  if (orderType !== 'delivery') return
+
+  const missing: string[] = []
+  if (!details.customer_name?.trim()) missing.push('customer name')
+  if (!details.customer_phone?.trim()) missing.push('phone number')
+  if (!details.delivery_address?.trim()) missing.push('delivery address')
+
+  if (missing.length) {
+    throw new Error(`A delivery order needs a ${missing.join(', ')}`)
+  }
+}
+
 export function createOrder(input: CreateOrderInput): Order {
   const db = getDb()
   const settings = getSettings()
+
+  assertCustomerDetails(input.order_type, input)
 
   return db.transaction(() => {
     if (input.order_type === 'dine_in' && input.table_id) {
@@ -218,16 +252,17 @@ export function createOrder(input: CreateOrderInput): Order {
       db
         .prepare(
           `INSERT INTO orders (order_number, order_type, table_id, guest_count, customer_name,
-             customer_phone, note, tax_pct, service_charge_pct)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+             customer_phone, delivery_address, note, tax_pct, service_charge_pct)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           orderNumber,
           input.order_type,
           input.table_id ?? null,
           input.guest_count ?? 1,
-          input.customer_name ?? null,
-          input.customer_phone ?? null,
+          input.customer_name?.trim() || null,
+          input.customer_phone?.trim() || null,
+          input.delivery_address?.trim() || null,
           input.note?.trim() || null,
           settings.tax_pct,
           // Service charge is a dine-in convention; charging it on a takeaway
@@ -261,6 +296,7 @@ export function updateOrder(
       | 'guest_count'
       | 'customer_name'
       | 'customer_phone'
+      | 'delivery_address'
       | 'discount_pct'
       | 'service_charge_pct'
       | 'tax_pct'
@@ -276,18 +312,23 @@ export function updateOrder(
   if (next.discount_pct < 0 || next.discount_pct > 100) {
     throw new Error('Discount must be between 0 and 100 percent')
   }
+  // Re-checked on every edit so a delivery cannot have its address blanked out
+  // after creation, and switching an order *to* delivery demands the details.
+  assertCustomerDetails(next.order_type, next)
 
   db.prepare(
     `UPDATE orders SET order_type=@order_type, table_id=@table_id, guest_count=@guest_count,
-       customer_name=@customer_name, customer_phone=@customer_phone, discount_pct=@discount_pct,
+       customer_name=@customer_name, customer_phone=@customer_phone,
+       delivery_address=@delivery_address, discount_pct=@discount_pct,
        service_charge_pct=@service_charge_pct, tax_pct=@tax_pct, note=@note
      WHERE id=@id`
   ).run({
     order_type: next.order_type,
     table_id: next.table_id,
     guest_count: next.guest_count,
-    customer_name: next.customer_name,
-    customer_phone: next.customer_phone,
+    customer_name: next.customer_name?.trim() || null,
+    customer_phone: next.customer_phone?.trim() || null,
+    delivery_address: next.delivery_address?.trim() || null,
     discount_pct: next.discount_pct,
     service_charge_pct: next.service_charge_pct,
     tax_pct: next.tax_pct,

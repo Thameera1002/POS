@@ -521,7 +521,8 @@ function RestaurantTab() {
           <p className="text-sm font-semibold">How this venue trades</p>
           <p className="text-xs text-slate-400 mt-1 mb-3">
             A takeaway-only shop has no tables, so the floor plan is hidden entirely and the
-            counter becomes the home screen.
+            takeaway queue becomes the home screen. Dine-in only hides the takeaway and
+            delivery screens.
           </p>
           <div className="grid grid-cols-3 gap-2">
             {(
@@ -551,8 +552,8 @@ function RestaurantTab() {
           onChange={(v) => setForm({ ...form, takeaway_pay_first: v ? 1 : 0 })}
         />
         <p className="text-[11px] text-slate-500">
-          Turns the counter's main button into “send &amp; take payment”, so a takeaway is rung in
-          and settled in one pass. The payment sheet only opens if the kitchen tickets actually
+          Turns the main button on takeaway and delivery orders into “send &amp; take payment”,
+          so the order is rung in and settled in one pass. The payment sheet only opens if the kitchen tickets actually
           printed.
         </p>
       </div>

@@ -137,6 +137,8 @@ export interface Order {
   guest_count: number
   customer_name: string | null
   customer_phone: string | null
+  /** Required for delivery orders; null otherwise. */
+  delivery_address: string | null
   status: OrderStatus
   /** Percent, 0-100, applied to subtotal. */
   discount_pct: number
@@ -161,6 +163,7 @@ export interface OrderSummary {
   guest_count: number
   customer_name?: string | null
   customer_phone?: string | null
+  delivery_address?: string | null
   status: OrderStatus
   total_cents: number
   item_count: number
@@ -205,7 +208,7 @@ export interface PrintJob {
 /**
  * How the venue trades. A takeaway-only shop has no tables, so showing it a
  * floor plan is noise — the whole floor concept disappears from the UI and the
- * counter becomes the home screen.
+ * takeaway queue becomes the home screen.
  */
 export type ServiceMode = 'dine_in' | 'takeaway' | 'both'
 
@@ -261,8 +264,17 @@ export interface CreateOrderInput {
   guest_count?: number
   customer_name?: string | null
   customer_phone?: string | null
-  /** Delivery address, or any standing instruction for the whole order. */
+  /** Mandatory when order_type is 'delivery'; the server rejects it otherwise. */
+  delivery_address?: string | null
+  /** Standing instruction for the whole order, e.g. "all together please". */
   note?: string | null
+}
+
+/** Fields a customer may add or correct after an order is opened. */
+export interface CustomerDetailsInput {
+  customer_name: string | null
+  customer_phone: string | null
+  delivery_address: string | null
 }
 
 export interface AddItemInput {

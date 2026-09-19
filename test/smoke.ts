@@ -275,20 +275,86 @@ async function main(): Promise<void> {
   const noMatch = orders.searchOrders({ query: 'zzzz-no-such-customer' })
   check('a miss returns nothing', noMatch.length === 0, noMatch.length)
 
-  console.log('\n— delivery address reaches the paper —')
+  console.log('\n— takeaway asks for nothing —')
+  const bare = orders.createOrder({ order_type: 'takeaway' })
+  check('takeaway opens with no customer details', bare.id > 0 && bare.customer_name === null)
+  const withName = orders.updateOrder(bare.id, { customer_name: 'Kamal' })
+  check('details can be added later when asked', withName.customer_name === 'Kamal')
+  const partial = orders.updateOrder(bare.id, { customer_phone: '0711111111' })
+  check('a phone alone is fine on takeaway', partial.customer_phone === '0711111111')
+
+  console.log('\n— delivery demands name, phone and address —')
+  const rejects = (label: string, input: Parameters<typeof orders.createOrder>[0], expect: string): void => {
+    let msg = ''
+    try {
+      orders.createOrder(input)
+    } catch (e) {
+      msg = e instanceof Error ? e.message : String(e)
+    }
+    check(label, msg.includes(expect), msg || '(created!)')
+  }
+  rejects(
+    'no details at all is rejected',
+    { order_type: 'delivery' },
+    'customer name, phone number, delivery address'
+  )
+  rejects(
+    'missing address is rejected',
+    { order_type: 'delivery', customer_name: 'A', customer_phone: '1' },
+    'delivery address'
+  )
+  rejects(
+    'missing phone is rejected',
+    { order_type: 'delivery', customer_name: 'A', delivery_address: 'X' },
+    'phone number'
+  )
+  rejects(
+    'missing name is rejected',
+    { order_type: 'delivery', customer_phone: '1', delivery_address: 'X' },
+    'customer name'
+  )
+  rejects(
+    'whitespace does not count',
+    { order_type: 'delivery', customer_name: '  ', customer_phone: '1', delivery_address: 'X' },
+    'customer name'
+  )
+
   let del = orders.createOrder({
     order_type: 'delivery',
     customer_name: 'Sunil',
     customer_phone: '0779876543',
-    note: '42 Galle Road, apt 5B'
+    delivery_address: '42 Galle Road, apt 5B'
   })
-  check('order note stored', del.note === '42 Galle Road, apt 5B', del.note)
+  check('complete delivery is accepted', del.delivery_address === '42 Galle Road, apt 5B')
+
+  let blanked = ''
+  try {
+    orders.updateOrder(del.id, { delivery_address: '' })
+  } catch (e) {
+    blanked = e instanceof Error ? e.message : String(e)
+  }
+  check('address cannot be blanked after creation', blanked.includes('delivery address'), blanked)
+
+  let switched = ''
+  try {
+    orders.updateOrder(bare.id, { order_type: 'delivery' })
+  } catch (e) {
+    switched = e instanceof Error ? e.message : String(e)
+  }
+  check('switching a takeaway to delivery demands the address', switched.includes('delivery address'))
+
+  console.log('\n— delivery address reaches the paper —')
   del = orders.addItem({ order_id: del.id, menu_item_id: fries.id, qty: 1 })
   const delFire = await orders.fireOrder(del.id)
   const delTicket = delFire.prints[0].preview
   check('address prints on the kitchen ticket', delTicket.includes('42 GALLE ROAD'))
+  check('address has its own DELIVER TO block', delTicket.includes('DELIVER TO'))
   check('phone prints on the kitchen ticket', delTicket.includes('0779876543'))
   check('ticket is headed DELIVERY', delTicket.includes('DELIVERY'))
+  const byAddress = orders.searchOrders({ query: 'Galle' })
+  check('searchable by address', byAddress.some((o) => o.id === del.id))
+  const queued = orders.listOpenOrders().find((o) => o.id === del.id)!
+  check('address on the queue card summary', queued.delivery_address === '42 Galle Road, apt 5B')
 
   console.log('\n— menu management —')
   const cat = menu.createCategory('Specials', '#ff0000')

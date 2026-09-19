@@ -1,8 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { usePos } from '../store'
-import { Modal } from '../components/Modal'
 import { cn, elapsed, money, orderNo } from '../lib/format'
-import type { OrderSummary, OrderType } from '../../../shared/types'
+import type { OrderSummary } from '../../../shared/types'
 
 /**
  * The floor plan — the screen staff live on.
@@ -12,8 +11,7 @@ import type { OrderSummary, OrderType } from '../../../shared/types'
  * yet?") is visible without opening a single check.
  */
 export function FloorScreen() {
-  const { tables, openOrders, openTable, loadOrder, settings } = usePos()
-  const [walkIn, setWalkIn] = useState<OrderType | null>(null)
+  const { tables, openOrders, openTable, loadOrder, settings, go } = usePos()
 
   const byTable = useMemo(() => {
     const map = new Map<string, OrderSummary>()
@@ -46,11 +44,12 @@ export function FloorScreen() {
             {money(dineIn.reduce((n, o) => n + o.total_cents, 0), sym)} on the floor
           </p>
         </div>
-        <div className="flex gap-3">
-          <button className="btn-ghost" onClick={() => setWalkIn('takeaway')}>
-            + Takeaway
+        {/* Takeaway and delivery have their own screens; the floor is tables only. */}
+        {settings?.service_mode !== 'dine_in' && (
+          <button className="btn-ghost" onClick={() => go('takeaway')}>
+            Takeaway →
           </button>
-        </div>
+        )}
       </div>
 
       <Legend />
@@ -116,7 +115,6 @@ export function FloorScreen() {
         </section>
       ))}
 
-      <WalkInModal type={walkIn} onClose={() => setWalkIn(null)} />
     </div>
   )
 }
@@ -137,72 +135,5 @@ function Legend() {
         </span>
       ))}
     </div>
-  )
-}
-
-function WalkInModal({ type, onClose }: { type: OrderType | null; onClose: () => void }) {
-  const { openTable } = usePos()
-  const [name, setName] = useState('')
-  const [phone, setPhone] = useState('')
-
-  const submit = async (): Promise<void> => {
-    if (!type) return
-    // A delivery with no phone number is an order nobody can chase.
-    await openTable({
-      order_type: type,
-      guest_count: 1,
-      customer_name: name.trim() || null,
-      customer_phone: phone.trim() || null
-    })
-    setName('')
-    setPhone('')
-    onClose()
-  }
-
-  return (
-    <Modal
-      open={type !== null}
-      title={type === 'delivery' ? 'New delivery order' : 'New takeaway order'}
-      onClose={onClose}
-      width="sm"
-      footer={
-        <>
-          <button className="btn-ghost" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            className="btn-primary"
-            onClick={submit}
-            disabled={type === 'delivery' && !phone.trim()}
-          >
-            Start order
-          </button>
-        </>
-      }
-    >
-      <div className="space-y-4">
-        <div>
-          <label className="label">Customer name</label>
-          <input
-            className="field"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Optional"
-            autoFocus
-          />
-        </div>
-        <div>
-          <label className="label">
-            Phone {type === 'delivery' && <span className="text-rose-400">*required</span>}
-          </label>
-          <input
-            className="field"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="+94 7X XXX XXXX"
-          />
-        </div>
-      </div>
-    </Modal>
   )
 }

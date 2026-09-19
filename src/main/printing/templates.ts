@@ -47,8 +47,14 @@ export function kitchenTicket(
   if (order.order_type === 'dine_in') p.row(`Guests: ${order.guest_count}`, '')
   if (order.customer_name) p.text(`Cust: ${order.customer_name}`)
   if (order.customer_phone) p.text(`Tel:  ${order.customer_phone}`)
-  // Standing instructions for the whole order (a delivery address, "all together
-  // please") belong at the top where they are read before anything is started.
+  // A delivery address is what the driver reads off the bag, so it gets its own
+  // bold block rather than a one-liner buried among the other headers.
+  if (order.delivery_address) {
+    p.text('DELIVER TO:', { bold: true })
+    p.text(order.delivery_address.toUpperCase(), { bold: true })
+  }
+  // Standing instructions for the whole order ("all together please") belong at
+  // the top where they are read before anything is started.
   if (order.note) p.text(`** ${order.note.toUpperCase()} **`, { bold: true })
   p.rule('=')
 
@@ -145,6 +151,7 @@ export function receipt(
   if (order.order_type === 'dine_in') p.row(`Guests: ${order.guest_count}`, '')
   if (order.customer_name) p.text(`Customer: ${order.customer_name}`)
   if (order.customer_phone) p.text(`Phone: ${order.customer_phone}`)
+  if (order.delivery_address) p.text(`Deliver to: ${order.delivery_address}`)
   if (order.note) p.text(order.note)
   p.rule('=')
 
